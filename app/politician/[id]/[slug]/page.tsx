@@ -7,7 +7,7 @@ import { AlertCircle, ExternalLink, ThumbsUp, ThumbsDown } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 
 // This would come from a database in a real application
-const getPolitician = (slug: string) => {
+const getPolitician = (id: string) => {
   // Mock data for Dr. Musa Ibrahim
   return {
     id: "1",
@@ -102,8 +102,8 @@ const getPolitician = (slug: string) => {
   }
 }
 
-export default function PoliticianPage({ params }: { params: { slug: string } }) {
-  const politician = getPolitician(params.slug)
+export default function PoliticianPage({ params }: { params: { id: string } }) {
+  const politician = getPolitician(params.id)
 
   const deliveredCount = politician.promises.filter((p) => p.status === "delivered").length
   const inProgressCount = politician.promises.filter((p) => p.status === "in-progress").length

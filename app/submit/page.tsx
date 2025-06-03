@@ -1,314 +1,217 @@
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+'use client'
+
+import { useState, useEffect } from 'react'
+import { getPoliticians } from "@/lib/actions"
+import { createContribution } from "@/lib/actions"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { UploadIcon as FileUpload, AlertCircle } from "lucide-react"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Button } from "@/components/ui/button"
+import { useRouter } from "next/navigation"
+import { Loader2 } from "lucide-react"
+import { Politician } from "@/lib/types"
+import {
+  Command,
+  CommandInput,
+  CommandList,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem
+} from "@/components/ui/command"
 
 export default function SubmitPage() {
+  const router = useRouter()
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [politicians, setPoliticians] = useState<Politician[]>([])
+  const [search, setSearch] = useState("");
+  const [selectedPolitician, setSelectedPolitician] = useState<string>("");
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    const fetchPoliticians = async () => {
+      try {
+        const data = await getPoliticians()
+        setPoliticians(data)
+      } catch (err) {
+        setError('Failed to load politicians')
+      }
+    }
+    fetchPoliticians()
+  }, [])
+
+  const filteredPoliticians = politicians.filter(p =>
+    p.name.toLowerCase().includes(search.toLowerCase()) ||
+    p.office.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    try {
+      setIsLoading(true)
+      setError(null)
+      const formData = new FormData(e.currentTarget)
+      await createContribution({
+        politician_id: formData.get('politician_id') as string,
+        type: formData.get('type') as any,
+        title: formData.get('title') as string,
+        details: formData.get('details') as string,
+        source_url: formData.get('source_url') as string,
+        source_date: formData.get('source_date') as string,
+        status: 'pending'
+      })
+      router.push('/')
+    } catch (err) {
+      if (err instanceof Error && err.message === 'User must be authenticated') {
+        router.push('/login')
+      } else {
+        setError(err instanceof Error ? err.message : 'Failed to submit information')
+      }
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="max-w-3xl mx-auto">
-        <h1 className="text-3xl font-bold mb-2">Submit Information</h1>
-        <p className="text-muted-foreground mb-8">
-          Help improve PolitiWiki by submitting verified information about Nigerian politicians.
-        </p>
+      <h1 className="text-4xl font-bold mb-8">Submit Information</h1>
+      
+      {error && (
+        <div className="mb-4 p-4 bg-red-100 text-red-700 rounded-md">
+          {error}
+        </div>
+      )}
 
-        <Alert className="mb-6">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            All submissions are reviewed by our team before publishing. Please provide credible sources.
-          </AlertDescription>
-        </Alert>
+      <Card>
+        <CardHeader>
+          <CardTitle>Contribute to PolitiWiki</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit}>
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="politician">Select Politician</Label>
+                <div>
+                  <button
+                    type="button"
+                    className="w-full border rounded-md px-3 py-2 text-left text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                    onClick={() => setOpen(true)}
+                    disabled={isLoading}
+                  >
+                    {selectedPolitician
+                      ? politicians.find(p => p.id === selectedPolitician)?.name +
+                        " - " +
+                        politicians.find(p => p.id === selectedPolitician)?.office
+                      : "Choose a politician"}
+                  </button>
+                  <input
+                    type="hidden"
+                    name="politician_id"
+                    value={selectedPolitician}
+                    required
+                  />
+                  <Command
+                    className={`absolute z-50 w-full bg-popover border rounded-md shadow-lg ${open ? '' : 'hidden'}`}
+                  >
+                    <CommandInput placeholder="Search politicians..." />
+                    <CommandList>
+                      <CommandEmpty>No politicians found.</CommandEmpty>
+                      <CommandGroup>
+                        {politicians.map((politician) => (
+                          <CommandItem
+                            key={politician.id}
+                            value={politician.id}
+                            onSelect={() => {
+                              setSelectedPolitician(politician.id);
+                              setOpen(false);
+                            }}
+                          >
+                            {politician.name} - {politician.office}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </div>
+              </div>
 
-        <Tabs defaultValue="politician">
-          <TabsList className="grid grid-cols-3 mb-6">
-            <TabsTrigger value="politician">New Politician</TabsTrigger>
-            <TabsTrigger value="update">Update Existing</TabsTrigger>
-            <TabsTrigger value="evidence">Submit Evidence</TabsTrigger>
-          </TabsList>
+              <div className="space-y-2">
+                <Label htmlFor="type">Type of Information</Label>
+                <Select name="type" required disabled={isLoading}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="new_promise">New Promise</SelectItem>
+                    <SelectItem value="promise_update">Promise Update</SelectItem>
+                    <SelectItem value="statement">Public Statement</SelectItem>
+                    <SelectItem value="scandal">Scandal</SelectItem>
+                    <SelectItem value="background">Background Information</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-          <TabsContent value="politician">
-            <Card>
-              <CardHeader>
-                <CardTitle>Submit a New Politician</CardTitle>
-                <CardDescription>Add a politician who is not yet in our database</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium mb-1">Full Name</label>
-                      <Input placeholder="e.g., Dr. Musa Ibrahim" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1">Current Office</label>
-                      <Input placeholder="e.g., Senator, Governor" />
-                    </div>
-                  </div>
+              <div className="space-y-2">
+                <Label htmlFor="title">Title</Label>
+                <Input
+                  id="title"
+                  name="title"
+                  placeholder="Enter a title for this information"
+                  required
+                  disabled={isLoading}
+                />
+              </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium mb-1">State/Region</label>
-                      <Select>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select state" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="lagos">Lagos</SelectItem>
-                          <SelectItem value="abuja">FCT (Abuja)</SelectItem>
-                          <SelectItem value="kano">Kano</SelectItem>
-                          <SelectItem value="rivers">Rivers</SelectItem>
-                          {/* More states would be added here */}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1">Political Party</label>
-                      <Select>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select party" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="apc">APC</SelectItem>
-                          <SelectItem value="pdp">PDP</SelectItem>
-                          <SelectItem value="lp">Labour Party</SelectItem>
-                          <SelectItem value="nnpp">NNPP</SelectItem>
-                          {/* More parties would be added here */}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
+              <div className="space-y-2">
+                <Label htmlFor="details">Details</Label>
+                <Textarea
+                  id="details"
+                  name="details"
+                  placeholder="Provide detailed information"
+                  required
+                  disabled={isLoading}
+                />
+              </div>
 
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Background Information</label>
-                    <Textarea placeholder="Education, previous roles, known affiliations" className="min-h-[100px]" />
-                  </div>
+              <div className="space-y-2">
+                <Label htmlFor="source_url">Source URL</Label>
+                <Input
+                  id="source_url"
+                  name="source_url"
+                  type="url"
+                  placeholder="https://example.com/news"
+                  required
+                  disabled={isLoading}
+                />
+              </div>
 
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Contact Information (if public)</label>
-                    <Textarea placeholder="Email, social media handles, phone number" className="min-h-[80px]" />
-                  </div>
+              <div className="space-y-2">
+                <Label htmlFor="source_date">Source Date</Label>
+                <Input
+                  id="source_date"
+                  name="source_date"
+                  type="date"
+                  required
+                  disabled={isLoading}
+                />
+              </div>
 
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Notable Quotes or Promises</label>
-                    <Textarea placeholder="Campaign promises or notable public statements" className="min-h-[80px]" />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Sources</label>
-                    <Textarea
-                      placeholder="URLs to credible sources that verify this information"
-                      className="min-h-[80px]"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Upload Photo (optional)</label>
-                    <div className="border-2 border-dashed rounded-md p-6 text-center">
-                      <FileUpload className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-                      <p className="text-sm text-muted-foreground">Drag and drop a photo here, or click to browse</p>
-                      <Input type="file" className="hidden" />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Your Email (for verification)</label>
-                    <Input type="email" placeholder="your.email@example.com" />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      We may contact you to verify information. Your email will not be published.
-                    </p>
-                  </div>
-
-                  <div className="pt-2">
-                    <Button className="w-full bg-green-700 hover:bg-green-800">Submit Politician</Button>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="update">
-            <Card>
-              <CardHeader>
-                <CardTitle>Update Existing Politician</CardTitle>
-                <CardDescription>Add or update information for a politician already in our database</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Select Politician</label>
-                    <Select>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Search for a politician" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="musa-ibrahim">Dr. Musa Ibrahim</SelectItem>
-                        <SelectItem value="adebayo-ogunlesi">Chief Adebayo Ogunlesi</SelectItem>
-                        <SelectItem value="amina-bello">Hon. Amina Bello</SelectItem>
-                        {/* More politicians would be added here */}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Update Type</label>
-                    <Select>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select update type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="promise">New Promise</SelectItem>
-                        <SelectItem value="promise-update">Promise Update</SelectItem>
-                        <SelectItem value="statement">Public Statement</SelectItem>
-                        <SelectItem value="scandal">Scandal/Investigation</SelectItem>
-                        <SelectItem value="background">Background Information</SelectItem>
-                        <SelectItem value="contact">Contact Information</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Title/Summary</label>
-                    <Input placeholder="Brief title or summary of the update" />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Details</label>
-                    <Textarea placeholder="Provide detailed information about this update" className="min-h-[150px]" />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Source URLs</label>
-                    <Textarea
-                      placeholder="URLs to credible sources that verify this information"
-                      className="min-h-[80px]"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Date of Information</label>
-                    <Input type="date" />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Your Email (for verification)</label>
-                    <Input type="email" placeholder="your.email@example.com" />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      We may contact you to verify information. Your email will not be published.
-                    </p>
-                  </div>
-
-                  <div className="pt-2">
-                    <Button className="w-full bg-green-700 hover:bg-green-800">Submit Update</Button>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="evidence">
-            <Card>
-              <CardHeader>
-                <CardTitle>Submit Evidence</CardTitle>
-                <CardDescription>Provide evidence for an existing claim or promise</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Select Politician</label>
-                    <Select>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Search for a politician" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="musa-ibrahim">Dr. Musa Ibrahim</SelectItem>
-                        <SelectItem value="adebayo-ogunlesi">Chief Adebayo Ogunlesi</SelectItem>
-                        <SelectItem value="amina-bello">Hon. Amina Bello</SelectItem>
-                        {/* More politicians would be added here */}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Select Promise/Claim</label>
-                    <Select>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a promise or claim" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="power-2024">Fix power supply by 2024</SelectItem>
-                        <SelectItem value="schools">Build 10 new schools</SelectItem>
-                        <SelectItem value="health-center">Construct health center</SelectItem>
-                        {/* More promises would be added here */}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Evidence Type</label>
-                    <Select>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select evidence type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="fulfilled">Evidence of Fulfillment</SelectItem>
-                        <SelectItem value="progress">Evidence of Progress</SelectItem>
-                        <SelectItem value="contradiction">Evidence of Contradiction</SelectItem>
-                        <SelectItem value="delay">Evidence of Delay</SelectItem>
-                        <SelectItem value="abandonment">Evidence of Abandonment</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Evidence Description</label>
-                    <Textarea placeholder="Describe the evidence in detail" className="min-h-[150px]" />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Source URLs</label>
-                    <Textarea
-                      placeholder="URLs to news articles, official documents, or other credible sources"
-                      className="min-h-[80px]"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Upload Evidence (optional)</label>
-                    <div className="border-2 border-dashed rounded-md p-6 text-center">
-                      <FileUpload className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-                      <p className="text-sm text-muted-foreground">
-                        Drag and drop evidence files here, or click to browse
-                      </p>
-                      <Input type="file" className="hidden" />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Date of Evidence</label>
-                    <Input type="date" />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Your Email (for verification)</label>
-                    <Input type="email" placeholder="your.email@example.com" />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      We may contact you to verify information. Your email will not be published.
-                    </p>
-                  </div>
-
-                  <div className="pt-2">
-                    <Button className="w-full bg-green-700 hover:bg-green-800">Submit Evidence</Button>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
-      </div>
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Submitting...
+                  </>
+                ) : (
+                  'Submit Information'
+                )}
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   )
 }

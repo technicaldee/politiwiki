@@ -27,6 +27,15 @@
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
+-- Profiles table
+CREATE TABLE IF NOT EXISTS profiles (
+  id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  email text NOT NULL,
+  role text NOT NULL CHECK (role IN ('admin', 'moderator', 'user')),
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+
 -- Politicians table
 CREATE TABLE IF NOT EXISTS politicians (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -105,12 +114,26 @@ CREATE TABLE IF NOT EXISTS ratings (
 );
 
 -- Enable Row Level Security
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE politicians ENABLE ROW LEVEL SECURITY;
 ALTER TABLE promises ENABLE ROW LEVEL SECURITY;
 ALTER TABLE statements ENABLE ROW LEVEL SECURITY;
 ALTER TABLE scandals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE contributions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ratings ENABLE ROW LEVEL SECURITY;
+
+-- Policies for profiles table
+CREATE POLICY "Allow users to read their own profile"
+  ON profiles
+  FOR SELECT
+  TO authenticated
+  USING (auth.uid() = id);
+
+CREATE POLICY "Allow users to update their own profile"
+  ON profiles
+  FOR UPDATE
+  TO authenticated
+  USING (auth.uid() = id);
 
 -- Policies for politicians table
 CREATE POLICY "Allow public read access to politicians"
@@ -176,6 +199,11 @@ END;
 $$ language 'plpgsql';
 
 -- Create triggers for updated_at
+CREATE TRIGGER update_profiles_updated_at
+    BEFORE UPDATE ON profiles
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
 CREATE TRIGGER update_politicians_updated_at
     BEFORE UPDATE ON politicians
     FOR EACH ROW
