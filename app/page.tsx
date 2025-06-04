@@ -10,6 +10,7 @@ export default function Home() {
     <div>
       {/* Hero Section */}
       <section className="bg-gradient-to-b from-green-50 to-white dark:from-green-950 dark:to-background py-16 md:py-24">
+        <img src="/circle.png" alt="Logo" className="w-10 h-10 my-4" />
         <div className="container mx-auto px-4 text-center">
           <h1 className="text-4xl md:text-6xl font-bold mb-6">
             Track Nigerian Politicians
